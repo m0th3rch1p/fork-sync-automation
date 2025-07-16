@@ -1,0 +1,94 @@
+name: Sync All Forks
+
+on:
+  # Allows me to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+  # Runs the workflow on a schedule. This is set to run daily at 3:15 AM UTC.
+  # Use crontab.guru to customize the schedule.
+  schedule:
+    - cron: '15 3 * * *'
+
+# Job to perform the synchronization
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout controller repository
+        uses: actions/checkout@v4
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Sync Forks
+        # The GITHUB_TOKEN has insufficient permissions to list all repos and push to them.
+        # You MUST create a Personal Access Token (PAT) with 'repo' scope and add it
+        # as a repository secret named GH_PAT.
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+          
+          echo "Fetching list of forked repositories..."
+          
+          # Fetch all forked repos owned by the authenticated user.
+          # We get the repo name and the parent's full name (e.g., "upstream/repo").
+          # The output is JSON.
+          repo_list_json=$(gh repo list --fork --limit 1000 --json name,parent)
+          
+          # Use jq to parse the JSON and loop through each item.
+          echo "$repo_list_json" | jq -c '.[]' | while read -r repo_json; do
+            repo_name=$(echo "$repo_json" | jq -r '.name')
+            parent_name=$(echo "$repo_json" | jq -r '.parent.nameWithOwner')
+            
+            echo "--- Processing repository: $repo_name ---"
+            
+            # Clone your fork
+            git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.actor }}/$repo_name.git"
+            cd "$repo_name"
+            
+            # Add the original repository as a remote named "upstream"
+            git remote add upstream "https://github.com/$parent_name.git"
+            
+            # Fetch all branches from the upstream
+            git fetch upstream
+            
+            # Get a list of all branches on the upstream remote
+            upstream_branches=$(git branch -r | grep 'upstream/' | sed 's/  upstream\///')
+            
+            for branch in $upstream_branches; do
+              # Skip HEAD pointers or other non-branch refs
+              if [[ "$branch" == "HEAD" || "$branch" == *'->'* ]]; then
+                continue
+              fi
+              
+              echo "Syncing branch: $branch"
+              
+              # Check if the branch exists locally. If not, create it to track the upstream branch.
+              if ! git show-ref --verify --quiet "refs/heads/$branch"; then
+                git checkout -b "$branch" "upstream/$branch"
+              else
+                # If it exists, check it out.
+                git checkout "$branch"
+                # Ensure we are up-to-date with our own origin before merging upstream
+                git pull origin "$branch" --ff-only --quiet || echo "Local branch $branch had diverged. Proceeding with merge."
+                # Merge changes from the upstream branch.
+                # The --ff-only flag ensures we only fast-forward, preventing merge commits on your fork.
+                # If a fast-forward is not possible, it will fail, which is safer.
+                # Remove --ff-only if you prefer to create merge commits.
+                git merge "upstream/$branch" --ff-only
+              fi
+            done
+            
+            # Push all updated branches back to your fork (origin)
+            echo "Pushing all updated branches to origin..."
+            git push --all origin
+            
+            cd ..
+            rm -rf "$repo_name"
+            
+            echo "--- Finished processing $repo_name ---"
+            echo ""
+          done
