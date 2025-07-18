@@ -41,23 +41,26 @@ jobs:
           
           echo "Fetching list of forked repositories for user: ${{ env.OWNER }}"
           
-          # Fetch all forked repos owned by the authenticated user (PAT owner).
-          # We get the repo name and the parent's full name (e.g., "upstream/repo").
-          repo_list_json=$(gh repo list --fork --limit 1000 --json name,parent)
+          # Fetch only the names of the forked repos first.
+          repo_list_json=$(gh repo list --fork --limit 1000 --json name)
           
           # Use jq to parse the JSON and loop through each item.
           echo "$repo_list_json" | jq -c '.[]' | while read -r repo_json; do
             repo_name=$(echo "$repo_json" | jq -r '.name')
-            parent_name=$(echo "$repo_json" | jq -r '.parent.nameWithOwner')
             
-            # Skip if the parent repository information is missing
+            echo "--- Processing repository: $repo_name ---"
+
+            # Use `gh repo view` to get parent info reliably for each repo.
+            # This is more robust than getting it from the list view.
+            parent_info_json=$(gh repo view "${{ env.OWNER }}/$repo_name" --json parent)
+            parent_name=$(echo "$parent_info_json" | jq -r '.parent.nameWithOwner')
+            
+            # Skip if the parent repository information is missing or the fork relationship is broken.
             if [[ "$parent_name" == "null" ]]; then
-              echo "--- Skipping repository $repo_name (parent repository deleted or inaccessible) ---"
+              echo "--- Skipping '$repo_name': Could not resolve parent repository. The fork relationship may be broken or the parent is inaccessible. ---"
               continue
             fi
 
-            echo "--- Processing repository: $repo_name ---"
-            
             # Clone your fork using the PAT owner's username, not github.actor.
             git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ env.OWNER }}/$repo_name.git"
             cd "$repo_name"
