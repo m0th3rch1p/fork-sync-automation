@@ -53,7 +53,7 @@ jobs:
             # Use `gh repo view` to get parent info reliably for each repo.
             # This is more robust than getting it from the list view.
             parent_info_json=$(gh repo view "${{ env.OWNER }}/$repo_name" --json parent)
-            parent_name=$(echo "$parent_info_json" | jq -r '.parent.nameWithOwner')
+            parent_name=$(echo "$parent_info_json" | jq -r 'if .parent and .parent.owner and .parent.name then .parent.owner.login + "/" + .parent.name else "null" end')
             
             # Skip if the parent repository information is missing or the fork relationship is broken.
             if [[ "$parent_name" == "null" ]]; then
