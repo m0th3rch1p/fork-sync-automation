@@ -72,7 +72,7 @@ jobs:
             git fetch upstream --prune
             
             # Get a clean list of all branches on the upstream remote
-            upstream_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/upstream/ | sed 's/upstream\///')
+            upstream_refs=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/upstream/*')
             
             for branch in $upstream_branches; do
               echo "Syncing branch: $branch"
