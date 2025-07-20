@@ -31,6 +31,9 @@ jobs:
           # Configure git with the PAT owner's details for correct attribution.
           git config --global user.name "$OWNER"
           git config --global user.email "$OWNER@users.noreply.github.com"
+          
+          # Configure Git to use the PAT for all HTTPS operations to github.com.
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
 
       - name: Sync Forks
         env:
@@ -69,31 +72,25 @@ jobs:
             git remote add upstream "https://github.com/$parent_name.git"
             
             # Fetch all branches from the upstream and prune deleted ones
-            git fetch upstream --prune
+            git fetch upstream --prune --tags
             
             # Get a clean list of all branches on the upstream remote
             upstream_refs=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/upstream/*')
-            
+
+            # Use a direct fetch with a refspec to mirror upstream branches locally.
             for branch in $upstream_branches; do
-              echo "Syncing branch: $branch"
+              echo "Mirroring upstream branch '$branch' to local"
               
-              # Check if the branch exists locally.
-              if ! git show-ref --verify --quiet "refs/heads/$branch"; then
-                # If not, create it to track the upstream branch.
-                git checkout -b "$branch" "upstream/$branch"
-              else
-                # If it exists, check it out.
-                git checkout "$branch"
-                # Merge changes from the upstream branch.
-                # The --ff-only flag ensures we only fast-forward, preventing merge commits on your fork.
-                # If a fast-forward is not possible, it will fail, which is safer.
-                git merge "upstream/$branch" --ff-only
-              fi
+              # This command fetches the specific branch from upstream and forces the
+              # local branch of the same name to match it. This is a mirror operation.
+              # The '+' allows non-fast-forward updates (i.e., overwriting local changes).
+              git fetch upstream "+refs/heads/$branch:refs/heads/$branch"
             done
             
             # Push all updated branches back to your fork (origin)
             echo "Pushing all updated branches to origin..."
             git push --all origin
+            git push --tags origin
             
             cd ..
             rm -rf "$repo_name"
