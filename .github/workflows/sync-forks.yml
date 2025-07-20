@@ -74,22 +74,8 @@ jobs:
             # Fetch all branches from the upstream and prune deleted ones
             git fetch upstream --prune
             
-            # Get a clean list of all branches on the upstream remote
-            upstream_refs=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/upstream/*')
-
-            # Use a direct fetch with a refspec to mirror upstream branches locally.
-            for branch in $upstream_branches; do
-              echo "Mirroring upstream branch '$branch' to local"
-              
-              # This command fetches the specific branch from upstream and forces the
-              # local branch of the same name to match it. This is a mirror operation.
-              # The '+' allows non-fast-forward updates (i.e., overwriting local changes).
-              git fetch upstream "+refs/heads/$branch:refs/heads/$branch"
-            done
-            
-            # Push all updated branches back to your fork (origin)
-            echo "Pushing all updated branches to origin..."
-            git push --all origin
+            echo "Mirroring all branches from upstream to origin..."
+            git push --force origin "refs/remotes/upstream/*:refs/heads/*"
             
             cd ..
             rm -rf "$repo_name"
