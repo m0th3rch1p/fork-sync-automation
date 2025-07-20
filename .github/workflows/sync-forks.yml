@@ -72,7 +72,7 @@ jobs:
             git remote add upstream "https://github.com/$parent_name.git"
             
             # Fetch all branches from the upstream and prune deleted ones
-            git fetch upstream --prune --tags
+            git fetch upstream --prune
             
             # Get a clean list of all branches on the upstream remote
             upstream_refs=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/upstream/*')
@@ -90,7 +90,6 @@ jobs:
             # Push all updated branches back to your fork (origin)
             echo "Pushing all updated branches to origin..."
             git push --all origin
-            git push --tags origin
             
             cd ..
             rm -rf "$repo_name"
